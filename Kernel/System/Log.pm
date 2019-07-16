@@ -42,6 +42,17 @@ create a log object. Do not use it directly, instead use:
             LogPrefix => 'InstallScriptX',  # not required, but highly recommend
         },
     );
+
+you can override configured minimum log level by specifying it with MinimumLogLevel param
+and choose another log module with LogModule param (for runtime only):
+
+    Kernel::System::ObjectManager->new(
+        'Kernel::System::Log' => {
+            LogModule       => 'Kernel::System::Log::File',  # not required 
+            MinimumLogLevel => 'notice',                     # not required
+        },
+    );
+
     my $LogObject = $Kernel::OM->Get('Kernel::System::Log');
 
 =cut
@@ -75,13 +86,28 @@ sub new {
     $Self->{LogPrefix} = $Param{LogPrefix} || '?LogPrefix?';
     $Self->{LogPrefix} .= '-' . $SystemID;
 
-    # configured log level (debug by default)
-    $Self->{MinimumLevel}    = $ConfigObject->Get('MinimumLogLevel') || 'debug';
+    # set minimum log level
+    if ( $Param{MinimumLogLevel} ) {
+        if ( !exists $LogLevel{ $Param{MinimumLogLevel} } ) {
+            Carp::confess(
+                sprintf(
+                    'Invalid MinimumLogLevel param value \'%s\', it should be one of the values: %s',
+                    $Param{MinimumLogLevel},
+                    # make a pretty list with quoted priority names from the lowest priority to the highest
+                    join( ', ', map { "'" . $_ . "'" } sort { $LogLevel{$a} <=> $LogLevel{$b} } keys %LogLevel ),
+                )
+            );
+        }
+        $Self->{MinimumLevel} = $Param{MinimumLogLevel};
+    }
+    else {
+        $Self->{MinimumLevel} = $ConfigObject->Get('MinimumLogLevel') || 'debug';
+    }
     $Self->{MinimumLevel}    = lc $Self->{MinimumLevel};
     $Self->{MinimumLevelNum} = $LogLevel{ $Self->{MinimumLevel} };
 
     # load log backend
-    my $GenericModule = $ConfigObject->Get('LogModule') || 'Kernel::System::Log::SysLog';
+    my $GenericModule = $Param{LogModule} || $ConfigObject->Get('LogModule') || 'Kernel::System::Log::SysLog';
     if ( !eval "require $GenericModule" ) {    ## no critic
         die "Can't load log backend module $GenericModule! $@";
     }
