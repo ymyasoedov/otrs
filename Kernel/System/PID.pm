@@ -103,7 +103,7 @@ sub PIDCreate {
         $Kernel::OM->Get('Kernel::System::Log')->Log(
             Priority => 'notice',
             Message  => "Removed PID ($ProcessID{Name}/$ProcessID{Host}/$ProcessID{PID}, "
-                . "because 1 hour old!",
+                . "because TTL ($TTL sec) exceeded!",
         );
     }
 
