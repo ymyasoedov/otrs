@@ -14,6 +14,7 @@ use strict;
 use warnings;
 
 use Digest::MD5 qw(md5_hex);
+use Digest::SHA qw(sha256_hex);
 use Data::Dumper;
 use File::stat;
 use Unicode::Normalize;
@@ -701,10 +702,98 @@ get an C<MD5> sum of a file or a string
         String => $SomeString,
     );
 
+this method is just an alias for Digest()
+
+    $MainObject->Digest(
+        Filename => '/path/to/me_to_alal.xml',
+        Hash     => 'md5',
+    );
+
 =cut
 
 sub MD5sum {
+    my $Self = shift;
+
+    # Prevent data copying by passing %Param as @_,
+    # it makes sense when String is passed by value
+    return $Self->Digest( @_, Hash => 'md5' );
+}
+
+=head2 SHA256sum()
+
+get an C<SHA256> sum of a file or a string
+
+    my $SHA256Sum = $MainObject->SHA256sum(
+        Filename => '/path/to/me_to_alal.xml',
+    );
+
+    my $SHA256Sum = $MainObject->SHA256sum(
+        String => \$SomeString,
+    );
+
+    # note: needs more memory!
+    my $SHA256Sum = $MainObject->SHA256sum(
+        String => $SomeString,
+    );
+
+this method is just an alias for Digest()
+
+    $MainObject->Digest(
+        Filename => '/path/to/me_to_alal.xml',
+        Hash     => 'sha256',
+    );
+
+=cut
+
+sub SHA256sum {
+    my $Self = shift;
+
+    # Prevent data copying by passing %Param as @_,
+    # it makes sense when String is passed by value
+    return $Self->Digest( @_, Hash => 'sha256' );
+}
+
+=head2 Digest()
+
+get C<SHA256> or C<MD5> sum of a file or a string
+
+    my $SHA256sum = $MainObject->Digest(
+        Filename => '/path/to/me_to_alal.xml',
+        Hash     => 'sha256', # or 'md5'
+    );
+
+    my $SHA256sum = $MainObject->Digest(
+        String => \$SomeString,
+        Hash   => 'sha256', # or 'md5'
+    );
+
+    # note: needs more memory!
+    my $SHA256sum = $MainObject->Digest(
+        String => $SomeString,
+        Hash   => 'sha256', # or 'md5'
+    );
+
+=cut
+
+sub Digest {
     my ( $Self, %Param ) = @_;
+
+    if ( !$Param{Hash} ) {
+        $Kernel::OM->Get('Kernel::System::Log')->Log(
+            Priority => 'error',
+            Message  => 'Need Hash!',
+        );
+        return;
+    }
+
+    $Param{Hash} = lc $Param{Hash};
+    if ( $Param{Hash} ne 'sha256' && $Param{Hash} ne 'md5' ) {
+        $Kernel::OM->Get('Kernel::System::Log')->Log(
+            Priority => 'error',
+            Message  => "Hash should be 'sha256' or 'md5'!",
+        );
+        return;
+    }
 
     if ( !$Param{Filename} && !defined( $Param{String} ) ) {
         $Kernel::OM->Get('Kernel::System::Log')->Log(
@@ -714,7 +803,7 @@ sub MD5sum {
         return;
     }
 
-    # md5sum file
+    # file digest
     if ( $Param{Filename} ) {
 
         # open file
@@ -739,25 +828,42 @@ sub MD5sum {
         }
 
         binmode $FH;
-        my $MD5sum = Digest::MD5->new()->addfile($FH)->hexdigest();
+        my $Digest;
+        # sha256 or md5
+        if ( $Param{Hash} eq 'sha256' ) {
+            $Digest = Digest::SHA->new(256)->addfile($FH)->hexdigest();
+        }
+        else {
+            $Digest = Digest::MD5->new()->addfile($FH)->hexdigest();
+        }
         close $FH;
 
-        return $MD5sum;
+        return $Digest;
     }
 
     # get encode object
     my $EncodeObject = $Kernel::OM->Get('Kernel::System::Encode');
 
-    # md5sum string
+    # string digest
     if ( !ref $Param{String} ) {
         $EncodeObject->EncodeOutput( \$Param{String} );
-        return md5_hex( $Param{String} );
+        if ( $Param{Hash} eq 'sha256' ) {
+            return sha256_hex( $Param{String} );
+        }
+        else {
+            return md5_hex( $Param{String} );
+        }
     }
 
-    # md5sum scalar reference
+    # scalar reference digest
     if ( ref $Param{String} eq 'SCALAR' ) {
         $EncodeObject->EncodeOutput( $Param{String} );
-        return md5_hex( ${ $Param{String} } );
+        if ( $Param{Hash} eq 'sha256' ) {
+            return sha256_hex( ${ $Param{String} } );
+        }
+        else {
+            return md5_hex( ${ $Param{String} } );
+        }
     }
 
     $Kernel::OM->Get('Kernel::System::Log')->Log(
